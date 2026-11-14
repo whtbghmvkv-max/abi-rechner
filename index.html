@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Abi Punkterechner</title>
+<meta name="description" content="Abi-Note aus Kurs- und Prüfungspunkten berechnen, mit Wunschnote und Klausuren-Check.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@600;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* Layout: Morgendämmerung über Fuji, davor eine Papierrolle (Kakejiku) mit den Werkzeugen.
+   Das Siegel (Hanko) mit der Note ist der eine laute Moment, alles andere bleibt ruhig. */
+:root {
+  --ai: #1c2547;        /* Indigo, Tinte */
+  --ai-soft: #4a5478;
+  --shu: #d6402c;       /* Zinnober, Siegel und Sonne */
+  --sakura: #f6b8c8;
+  --washi: #fbf6f7;     /* Papier */
+  --asagi: #2b8a97;     /* Wasserblau für Zustimmung */
+  --font-display: "Shippori Mincho B1", "Hiragino Mincho ProN", "Yu Mincho", serif;
+  --font-body: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: #24305e; color: var(--ai); font-family: var(--font-body); font-size: 16px; line-height: 1.6; overflow-x: hidden; }
+canvas.fx { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+#scene { z-index: 0; }
+#petals { z-index: 4; }
+#confetti { z-index: 60; }
+
+main { position: relative; z-index: 2; max-width: 760px; margin: 0 auto; padding: 0 16px 120px; }
+
+/* Hero */
+.hero { position: relative; padding: 17vh 4px 0; min-height: 52vh; display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 12px; }
+h1 {
+  font-family: var(--font-display); font-weight: 800; color: #fff;
+  font-size: clamp(38px, 10.5vw, 92px); line-height: 1.02; letter-spacing: -0.02em; margin: 0;
+  text-shadow: 0 2px 24px rgba(20, 26, 64, .55);
+  text-wrap: balance;
+}
+.lead { grid-column: 1 / -1; margin: 18px 0 0; max-width: 44ch; color: #fff; font-weight: 500; padding: 10px 14px; background: rgba(28,37,71,.62); border-left: 3px solid var(--shu); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+.vert {
+  position: absolute; left: 6px; top: 4vh; writing-mode: vertical-rl;
+  font-family: var(--font-display); font-weight: 600; font-size: 16px; letter-spacing: .2em;
+  color: rgba(255,255,255,.8); text-shadow: 0 1px 10px rgba(20,26,64,.6);
+}
+
+/* Siegel */
+.seal-wrap { position: relative; width: clamp(118px, 30vw, 164px); aspect-ratio: 1; margin-bottom: -34px; z-index: 3; }
+.seal-wrap svg { width: 100%; height: 100%; display: block; overflow: visible; filter: drop-shadow(0 6px 10px rgba(60,10,5,.35)); }
+.seal-note { font-family: var(--font-display); font-weight: 800; }
+.stamp { animation: stamp .55s cubic-bezier(.3,1.5,.5,1) backwards; transform-origin: 50% 50%; }
+@keyframes stamp {
+  0% { transform: scale(1.5) rotate(-9deg); opacity: 0; }
+  55% { transform: scale(.94) rotate(-2.5deg); opacity: 1; }
+  100% { transform: scale(1) rotate(-3deg); opacity: 1; }
+}
+.seal-wrap .stampee { transform: rotate(-3deg); transform-origin: 50% 50%; }
+
+/* Papierrolle */
+.scroll {
+  position: relative; background: rgba(251, 246, 247, .96); margin-top: 22px !important;
+  border-left: 1px solid rgba(28,37,71,.14); border-right: 1px solid rgba(28,37,71,.14);
+  padding: 54px 22px 54px; margin: 0 4px;
+  box-shadow: 0 30px 70px -24px rgba(20,22,60,.55);
+}
+.scroll::before, .scroll::after {
+  content: ""; position: absolute; left: -10px; right: -10px; height: 16px; border-radius: 8px;
+  background: linear-gradient(180deg, #5a3a2c, #8a5e48 45%, #4a2e24);
+  box-shadow: 0 4px 10px rgba(0,0,0,.35);
+}
+.scroll::before { top: -8px; }
+.scroll::after { bottom: -8px; }
+.grain { position: absolute; inset: 0; pointer-events: none; opacity: .5; mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='2' seed='4'/><feColorMatrix values='0 0 0 0 .55  0 0 0 0 .48  0 0 0 0 .5  0 0 0 .12 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"); }
+
+.scroll > section { position: relative; padding: 24px 0; border-top: 1px solid rgba(28,37,71,.16); }
+.scroll > section:first-of-type { border-top: 0; padding-top: 6px; }
+.hd { display: flex; align-items: baseline; gap: 12px; margin-bottom: 4px; }
+h2 { font-family: var(--font-display); font-weight: 800; font-size: 26px; letter-spacing: -0.01em; margin: 0; }
+.kan { font-family: var(--font-display); font-weight: 600; font-size: 20px; color: var(--shu); }
+.sub { color: var(--ai-soft); font-size: 14.5px; margin: 0 0 16px; max-width: 58ch; }
+.fine { font-size: 13px; color: var(--ai-soft); margin: 0; max-width: 60ch; }
+strong { font-weight: 700; }
+
+/* Ergebnis */
+.verdict { font-family: var(--font-display); font-weight: 600; font-size: 22px; line-height: 1.3; margin: 0 0 12px; max-width: 24ch; text-wrap: balance; }
+.meter { position: relative; height: 12px; background: rgba(28,37,71,.12); margin: 8px 0 26px; }
+.meter i { position: absolute; inset: 0 auto 0 0; width: 0; background: linear-gradient(90deg, var(--ai), var(--shu)); transition: width .9s cubic-bezier(.2,.7,.2,1); }
+.meter b { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--ai); }
+.meter b span { position: absolute; top: 18px; left: 50%; transform: translateX(-50%); font-size: 11.5px; font-weight: 500; white-space: nowrap; color: var(--ai-soft); }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.chip { font-size: 13px; padding: 5px 10px; border: 1px solid var(--ai); font-variant-numeric: tabular-nums; }
+.chip.ok { background: var(--ai); color: #fff; }
+.chip.bad { border-color: var(--shu); color: var(--shu); font-weight: 700; }
+
+/* Formulare */
+.row { display: grid; gap: 6px; margin-bottom: 16px; }
+.top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+label { font-weight: 500; }
+.val { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--shu); }
+.val small { color: var(--ai-soft); font-weight: 400; font-size: 13px; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+input[type=number], input[type=text] {
+  width: 100%; min-height: 46px; font: inherit; color: var(--ai);
+  background: rgba(255,255,255,.7); border: 1px solid rgba(28,37,71,.35); border-radius: 4px; padding: 10px 12px;
+}
+input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 34px; background: transparent; cursor: pointer; }
+input[type=range]::-webkit-slider-runnable-track { height: 4px; background: linear-gradient(90deg, var(--ai) var(--fill, 50%), rgba(28,37,71,.2) var(--fill, 50%)); }
+input[type=range]::-moz-range-track { height: 4px; background: rgba(28,37,71,.2); }
+input[type=range]::-moz-range-progress { height: 4px; background: var(--ai); }
+input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 24px; height: 24px; border-radius: 50%; margin-top: -10px; background: var(--shu); border: 3px solid var(--washi); box-shadow: 0 2px 8px rgba(40,10,10,.4); }
+input[type=range]::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%; background: var(--shu); border: 3px solid var(--washi); }
+:focus-visible { outline: 3px solid var(--asagi); outline-offset: 2px; }
+
+button { font: inherit; font-weight: 700; color: var(--ai); cursor: pointer; background: transparent; border: 1px solid var(--ai); border-radius: 4px; padding: 10px 16px; min-height: 44px; transition: background .15s, color .15s; }
+button:hover { background: var(--ai); color: #fff; }
+button:active { transform: translateY(1px); }
+
+.wish-out { margin-top: 12px; padding: 14px 16px; border-left: 4px solid var(--shu); background: rgba(246,184,200,.22); }
+.wish-out p { margin: 0 0 6px; }
+.wish-out p:last-child { margin: 0; }
+.wish-out strong { color: var(--shu); font-variant-numeric: tabular-nums; }
+
+/* Klausuren */
+.progress { height: 8px; background: rgba(28,37,71,.12); margin: 6px 0 14px; }
+.progress i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--sakura), var(--shu)); transition: width .6s cubic-bezier(.2,.7,.2,1); }
+.exams { list-style: none; margin: 0 0 14px; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; }
+.exams label { display: flex; align-items: center; gap: 10px; cursor: pointer; min-height: 46px; padding: 8px 12px; border: 1px solid rgba(28,37,71,.3); background: rgba(255,255,255,.55); }
+.exams input { width: 20px; height: 20px; accent-color: var(--shu); flex: none; }
+.exams li.done label { border-color: var(--shu); background: rgba(246,184,200,.3); }
+.exams li.done span { text-decoration: line-through; color: var(--ai-soft); }
+.add { display: flex; gap: 8px; margin-bottom: 12px; }
+.tools { display: flex; flex-wrap: wrap; gap: 8px; }
+.reward { margin-top: 18px; padding: 20px; text-align: center; background: var(--ai); color: #fff; border: 2px solid var(--shu); animation: pop .5s cubic-bezier(.2,1.4,.4,1); }
+.reward[hidden] { display: none; }
+.reward h3 { font-family: var(--font-display); font-weight: 800; font-size: 26px; margin: 0 0 6px; }
+.reward p { margin: 0 0 14px; color: rgba(255,255,255,.8); }
+.reward a { display: inline-block; text-decoration: none; font-weight: 700; color: #fff; background: var(--shu); padding: 13px 24px; }
+@keyframes pop { from { transform: scale(.92); opacity: 0; } to { transform: none; opacity: 1; } }
+
+
+/* Fächer und Tabs */
+.tabs { display: flex; margin-bottom: 14px; border: 1px solid var(--ai); width: max-content; max-width: 100%; }
+.tabs button { border: 0; border-radius: 0; min-height: 40px; padding: 8px 18px; }
+.tabs button[aria-selected="true"] { background: var(--ai); color: #fff; }
+.fach { padding: 12px; margin-bottom: 8px; border: 1px solid rgba(28,37,71,.28); background: rgba(255,255,255,.55); }
+.fach-top { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+.fach-top .fn { flex: 1; min-width: 0; min-height: 42px; font-weight: 700; }
+.lk { min-height: 42px; padding: 6px 12px; font-size: 14px; }
+.lk[aria-pressed="true"] { background: var(--shu); border-color: var(--shu); color: #fff; }
+.del { min-height: 42px; width: 42px; padding: 0; font-size: 20px; line-height: 1; }
+.qs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.qs label { display: grid; gap: 2px; font-size: 12px; color: var(--ai-soft); font-weight: 500; }
+.qs select { width: 100%; min-height: 42px; font: inherit; color: var(--ai); background: #fff; border: 1px solid rgba(28,37,71,.35); border-radius: 4px; padding: 6px 4px; }
+#rickbox { margin-top: 14px; }
+#rickbox[hidden] { display: none; }
+#rickbox iframe { width: 100%; aspect-ratio: 16 / 9; border: 0; display: block; background: #000; }
+#rickbox p { margin: 8px 0 0; font-size: 12.5px; color: rgba(255,255,255,.75); }
+#rickbox a { color: #fff; }
+.reward button.go { background: var(--shu); color: #fff; border-color: var(--shu); padding: 13px 24px; }
+.reward button.go[hidden] { display: none; }
+
+.dock { position: fixed; z-index: 10; left: 50%; bottom: 14px; transform: translateX(-50%); display: flex; align-items: center; gap: 12px; padding: 8px 18px 8px 8px; background: rgba(251,246,247,.95); border: 1px solid rgba(28,37,71,.3); border-radius: 999px; box-shadow: 0 10px 28px rgba(15,18,50,.4); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.dock .dot { width: 40px; height: 40px; border-radius: 8px; background: var(--shu); color: #fff; display: grid; place-content: center; font-family: var(--font-display); font-weight: 800; font-size: 18px; transform: rotate(-3deg); }
+.dock span { color: var(--ai-soft); font-size: 14px; }
+footer { text-align: center; color: rgba(255,255,255,.85); font-size: 13px; padding: 34px 0 0; text-shadow: 0 1px 8px rgba(20,26,64,.8); }
+
+@media (min-width: 640px) { .scroll { padding: 58px 40px; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<canvas class="fx" id="scene" aria-hidden="true"></canvas>
+<canvas class="fx" id="petals" aria-hidden="true"></canvas>
+<canvas class="fx" id="confetti" aria-hidden="true"></canvas>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <filter id="ink" x="-10%" y="-10%" width="120%" height="120%">
+    <feTurbulence type="fractalNoise" baseFrequency="0.045" numOctaves="3" seed="6" result="warp"/>
+    <feDisplacementMap in="SourceGraphic" in2="warp" scale="5" result="rough"/>
+    <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed="11" result="grain"/>
+    <feColorMatrix in="grain" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -2.1 1.9" result="mask"/>
+    <feComposite in="rough" in2="mask" operator="in"/>
+  </filter>
+</svg>
+
+<main>
+  <header class="hero">
+    <h1>Dein Abi<br>in Punkten</h1>
+    <div class="seal-wrap" role="img" id="sealwrap" aria-label="Abiturnote">
+      <svg viewBox="0 0 160 160" id="sealsvg">
+        <g class="stampee" id="stampee">
+          <g filter="url(#ink)">
+            <rect x="8" y="8" width="144" height="144" rx="10" fill="#d6402c"/>
+            <rect x="19" y="19" width="122" height="122" rx="4" fill="none" stroke="#fbf6f7" stroke-width="3.5"/>
+            <text id="sealnote" class="seal-note" x="80" y="94" text-anchor="middle" font-size="62" fill="#fbf6f7">1,6</text>
+            <text x="80" y="124" text-anchor="middle" font-size="15" fill="#fbf6f7" style="font-family:var(--font-display);font-weight:600;letter-spacing:.12em">卒業点</text>
+          </g>
+        </g>
+      </svg>
+    </div>
+    <p class="lead">Kurs- und Prüfungspunkte eintragen, Note sehen. Die Beispielwerte kannst du direkt überschreiben.</p>
+    <span class="vert" aria-hidden="true">点数計算</span>
+  </header>
+
+  <div class="scroll">
+    <div class="grain"></div>
+
+    <section aria-live="polite" aria-labelledby="h-res">
+      <div class="hd"><h2 id="h-res">Dein Ergebnis</h2><span class="kan" aria-hidden="true">結果</span></div>
+      <p class="verdict" id="verdict">…</p>
+      <div class="meter" aria-hidden="true">
+        <i id="bar"></i>
+        <b style="left:33.333%"><span>300 bestanden</span></b>
+      </div>
+      <p class="sub" style="margin-bottom:12px"><strong id="total">0</strong> von 900 Punkten</p>
+      <div class="chips" id="chips"></div>
+      <p class="fine">Richtwert nach dem bundesweiten Punkteschema. Zusatzregeln wie Mindestpunkte in einzelnen Fächern unterscheiden sich je nach Bundesland. Maßgeblich ist immer deine Schule.</p>
+    </section>
+
+    <section aria-labelledby="h-b1">
+      <div class="hd"><h2 id="h-b1">Block I: Kurse</h2><span class="kan" aria-hidden="true">授業</span></div>
+      <p class="sub">Deine Halbjahresergebnisse aus der Qualifikationsphase (Q1 bis Q4). Leistungskurse zählen doppelt. Maximal 600 Punkte.</p>
+      <div class="tabs" role="tablist" aria-label="Eingabeart">
+        <button type="button" role="tab" id="tab-fach" aria-selected="true" aria-controls="pane-fach">Pro Fach</button>
+        <button type="button" role="tab" id="tab-schnell" aria-selected="false" aria-controls="pane-schnell">Schnell</button>
+      </div>
+      <div id="pane-fach" role="tabpanel" aria-labelledby="tab-fach">
+        <div id="subs"></div>
+        <form class="add" id="addsub">
+          <input type="text" id="newsub" list="fachliste" placeholder="Fach hinzufügen" maxlength="30" aria-label="Neues Fach" autocomplete="off">
+          <datalist id="fachliste">
+            <option value="Deutsch"><option value="Mathe"><option value="Englisch"><option value="Französisch"><option value="Spanisch"><option value="Latein">
+            <option value="Biologie"><option value="Chemie"><option value="Physik"><option value="Informatik"><option value="Geschichte"><option value="Politik"><option value="Geografie">
+            <option value="Wirtschaft"><option value="Sport"><option value="Kunst"><option value="Musik"><option value="Religion"><option value="Ethik"><option value="Philosophie">
+          </datalist>
+          <button type="submit">Hinzufügen</button>
+        </form>
+        <div class="tools"><button type="button" id="clearpts">Beispielwerte leeren</button></div>
+        <p class="fine" style="margin-top:10px">Tippe in der Auswahl auf einen Wert. Leere Halbjahre zählen nicht mit und werden hochgerechnet. Schalte bei deinen Leistungskursen LK ein.</p>
+      </div>
+      <div id="pane-schnell" role="tabpanel" aria-labelledby="tab-schnell" hidden>
+        <div class="two">
+          <div class="row"><label for="n">Eingebrachte Kurse</label><input type="number" id="n" min="20" max="44" value="40" inputmode="numeric"></div>
+          <div class="row"><label for="sum">Summe Kurspunkte</label><input type="number" id="sum" min="0" max="660" value="480" inputmode="numeric"></div>
+        </div>
+        <div class="row">
+          <div class="top"><label for="avg">Durchschnitt pro Kurs</label><span class="val"><span id="avgv">12,0</span> <small>Punkte</small></span></div>
+          <input type="range" id="avg" min="0" max="15" step="0.1" value="12">
+        </div>
+      </div>
+      <p class="fine" style="margin-top:12px">Block I in der Wertung: <strong id="b1">480</strong> von 600 Punkten. <span id="b1info"></span></p>
+    </section>
+
+    <section aria-labelledby="h-b2">
+      <div class="hd"><h2 id="h-b2">Block II: Prüfungen</h2><span class="kan" aria-hidden="true">試験</span></div>
+      <p class="sub">Fünf Prüfungen mit je 0 bis 15 Punkten, vierfach gewertet. Maximal 300 Punkte.</p>
+      <div id="exams"></div>
+      <p class="fine">Block II in der Wertung: <strong id="b2">0</strong> von 300 Punkten.</p>
+    </section>
+
+    <section aria-labelledby="h-w">
+      <div class="hd"><h2 id="h-w">Wunschnote</h2><span class="kan" aria-hidden="true">目標</span></div>
+      <p class="sub">Welche Note willst du? Wir rechnen aus, was du dafür in den Prüfungen brauchst, ausgehend von deinem Block I.</p>
+      <div class="row">
+        <div class="top"><label for="wish">Ziel</label><span class="val" id="wishv">1,5</span></div>
+        <input type="range" id="wish" min="10" max="40" step="1" value="15">
+      </div>
+      <div class="wish-out" id="wishout"></div>
+    </section>
+
+    <section aria-labelledby="h-k">
+      <div class="hd"><h2 id="h-k">Klausuren-Check</h2><span class="kan" aria-hidden="true">完了</span></div>
+      <p class="sub">Hak ab, was du schon hinter dir hast. Wenn alles geschafft ist, wartet eine Belohnung.</p>
+      <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="Fortschritt Klausuren" id="pbar"><i id="pfill"></i></div>
+      <ul class="exams" id="klist"></ul>
+      <form class="add" id="addform">
+        <input type="text" id="newk" placeholder="Fach hinzufügen, z. B. Physik" maxlength="30" aria-label="Neues Fach">
+        <button type="submit">Hinzufügen</button>
+      </form>
+      <div class="tools">
+        <button type="button" id="allDone">Alle abhaken</button>
+        <button type="button" id="resetK">Zurücksetzen</button>
+      </div>
+      <div class="reward" id="reward" hidden>
+        <h3>Alle Klausuren geschafft</h3>
+        <p>Deine Abi-Ergebnisse sind da. Du hast sie dir verdient.</p>
+        <button type="button" class="go" id="playRick">Ergebnisse ansehen</button>
+        <div id="rickbox" hidden></div>
+      </div>
+    </section>
+  </div>
+
+  <footer>Gebaut für den Abi-Jahrgang. Teil den Link mit deinen Leuten.</footer>
+</main>
+
+<div class="dock" aria-hidden="true"><div class="dot" id="dnote">–</div><span><strong id="dtotal">0</strong> / 900 Punkte</span></div>
+
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var clamp = function (v, a, b) { return Math.min(b, Math.max(a, v)); };
+  var fmt = function (n10) { return (n10 / 10).toFixed(1).replace('.', ','); };
+  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* ---------- Rechenlogik ---------- */
+  // Note = 17/3 - Punkte/180, auf eine Stelle gekürzt. Ganzzahlig: floor((1020 - P) / 18) in Zehnteln.
+  function noteOf(p) { return p < 300 ? null : clamp(Math.floor((1020 - p) / 18), 10, 40); }
+  function minPoints(t) { return Math.max(300, 1003 - 18 * t); }
+
+  var DEF = [
+    { n: 'Deutsch', lk: true, q: [12, 11, 12, 13] }, { n: 'Mathe', lk: true, q: [11, 10, 12, 11] },
+    { n: 'Englisch', lk: false, q: [13, 12, 12, 13] }, { n: 'Geschichte', lk: false, q: [10, 11, 9, 12] },
+    { n: 'Biologie', lk: false, q: [12, 12, 13, 11] }, { n: 'Politik', lk: false, q: [11, 12, 11, 12] },
+    { n: 'Sport', lk: false, q: [14, 13, 14, 14] }, { n: 'Kunst', lk: false, q: [12, 13, 12, 12] },
+    { n: 'Religion', lk: false, q: [11, 10, 12, 11] }
+  ];
+  var S = { mode: 'fach', n: 40, sum: 480, subs: JSON.parse(JSON.stringify(DEF)), p: [11, 12, 10, 13, 12], wish: 15 };
+  var KEY2 = 'abi-rechner-v2';
+  function saveState() { try { localStorage.setItem(KEY2, JSON.stringify(S)); } catch (e) {} }
+  (function loadState() {
+    try {
+      var sv = JSON.parse(localStorage.getItem(KEY2) || 'null');
+      if (sv && Array.isArray(sv.subs) && Array.isArray(sv.p) && sv.p.length === 5) {
+        S.mode = sv.mode === 'schnell' ? 'schnell' : 'fach';
+        S.n = clamp(+sv.n || 40, 20, 44); S.sum = clamp(+sv.sum || 0, 0, 660);
+        S.subs = sv.subs.slice(0, 20).map(function (f) {
+          return { n: String(f.n || '').slice(0, 30), lk: !!f.lk, q: [0, 1, 2, 3].map(function (k) {
+            var v = f.q && f.q[k]; return (v === null || v === undefined || v === '') ? null : clamp(+v || 0, 0, 15); }) };
+        });
+        S.p = sv.p.map(function (v) { return clamp(+v || 0, 0, 15); });
+        S.wish = clamp(+sv.wish || 15, 10, 40);
+      }
+    } catch (e) {}
+  })();
+  // Leistungskurse zählen doppelt: gewichteter Schnitt mal 40.
+  function fachStats() {
+    var s = 0, w = 0, cnt = 0;
+    S.subs.forEach(function (f) { var wt = f.lk ? 2 : 1; f.q.forEach(function (v) { if (v !== null) { s += v * wt; w += wt; cnt++; } }); });
+    return { s: s, w: w, cnt: cnt };
+  }
+  function block1() {
+    if (S.mode === 'schnell') { var n = clamp(S.n, 20, 44); return Math.round(clamp(S.sum, 0, 15 * n) * 40 / n); }
+    var st = fachStats(); return st.w ? Math.round(st.s / st.w * 40) : 0;
+  }
+  function block2() { return S.p.reduce(function (a, v) { return a + v; }, 0) * 4; }
+
+  /* ---------- Block II ---------- */
+  var examsEl = $('exams');
+  for (var i = 0; i < 5; i++) (function (i) {
+    var row = document.createElement('div'); row.className = 'row';
+    row.innerHTML = '<div class="top"><label for="p' + i + '">Prüfung ' + (i + 1) + '</label>' +
+      '<span class="val"><span id="pv' + i + '">0</span> <small>Pkt. = <span id="pw' + i + '">0</span></small></span></div>' +
+      '<input type="range" id="p' + i + '" min="0" max="15" step="1" value="' + S.p[i] + '">';
+    examsEl.appendChild(row);
+    row.querySelector('input').addEventListener('input', function (e) { S.p[i] = +e.target.value; render(); });
+  })(i);
+
+  $('n').addEventListener('input', function (e) {
+    var v = parseInt(e.target.value, 10); if (isNaN(v)) return;
+    var avg = S.sum / clamp(S.n, 20, 44);
+    S.n = clamp(v, 20, 44); S.sum = Math.round(avg * S.n); render();
+  });
+  $('sum').addEventListener('input', function (e) {
+    var v = parseInt(e.target.value, 10); if (isNaN(v)) return;
+    S.sum = clamp(v, 0, 15 * clamp(S.n, 20, 44)); render('sum');
+  });
+  $('avg').addEventListener('input', function (e) { S.sum = Math.round(+e.target.value * clamp(S.n, 20, 44)); render('avg'); });
+  $('wish').addEventListener('input', function (e) { S.wish = +e.target.value; render(); });
+
+  /* ---------- Fächer-Eingabe ---------- */
+  var subsEl = $('subs');
+  function mk(tag, cls) { var e = document.createElement(tag); if (cls) e.className = cls; return e; }
+  function buildSubs() {
+    subsEl.innerHTML = '';
+    S.subs.forEach(function (f, i) {
+      var d = mk('div', 'fach'), top = mk('div', 'fach-top');
+      var nm = mk('input', 'fn'); nm.type = 'text'; nm.value = f.n; nm.maxLength = 30; nm.id = 'fn' + i; nm.setAttribute('aria-label', 'Fachname');
+      nm.addEventListener('input', function () { f.n = nm.value; saveState(); });
+      var lk = mk('button', 'lk'); lk.type = 'button'; lk.textContent = 'LK'; lk.setAttribute('aria-pressed', String(f.lk)); lk.title = 'Leistungskurs: zählt doppelt';
+      lk.addEventListener('click', function () { f.lk = !f.lk; lk.setAttribute('aria-pressed', String(f.lk)); render(); });
+      var del = mk('button', 'del'); del.type = 'button'; del.textContent = '×'; del.setAttribute('aria-label', 'Fach entfernen');
+      del.addEventListener('click', function () { S.subs.splice(i, 1); buildSubs(); render(); });
+      top.appendChild(nm); top.appendChild(lk); top.appendChild(del);
+      var qs = mk('div', 'qs');
+      for (var k = 0; k < 4; k++) (function (k) {
+        var lab = mk('label'), sp = mk('span'); sp.textContent = 'Q' + (k + 1);
+        var sel = mk('select'); sel.id = 'q' + i + '_' + k;
+        var o0 = document.createElement('option'); o0.value = ''; o0.textContent = '–'; sel.appendChild(o0);
+        for (var v = 0; v <= 15; v++) { var o = document.createElement('option'); o.value = String(v); o.textContent = String(v); sel.appendChild(o); }
+        sel.value = f.q[k] === null ? '' : String(f.q[k]);
+        sel.addEventListener('change', function () { f.q[k] = sel.value === '' ? null : +sel.value; render(); });
+        lab.appendChild(sp); lab.appendChild(sel); qs.appendChild(lab);
+      })(k);
+      d.appendChild(top); d.appendChild(qs); subsEl.appendChild(d);
+    });
+  }
+  $('addsub').addEventListener('submit', function (e) {
+    e.preventDefault(); var v = $('newsub').value.trim(); if (!v || S.subs.length >= 20) return;
+    S.subs.push({ n: v, lk: false, q: [null, null, null, null] }); $('newsub').value = ''; buildSubs(); render();
+  });
+  $('clearpts').addEventListener('click', function () { S.subs.forEach(function (f) { f.q = [null, null, null, null]; }); buildSubs(); render(); });
+  function setMode(m) { S.mode = m; render(); }
+  $('tab-fach').addEventListener('click', function () { setMode('fach'); });
+  $('tab-schnell').addEventListener('click', function () { setMode('schnell'); });
+  function applyMode() {
+    var f = S.mode === 'fach';
+    $('tab-fach').setAttribute('aria-selected', String(f)); $('tab-schnell').setAttribute('aria-selected', String(!f));
+    $('pane-fach').hidden = !f; $('pane-schnell').hidden = f;
+  }
+  function infoText() {
+    if (S.mode === 'schnell') return 'Bei weniger als 40 Kursen wird auf 40 hochgerechnet.';
+    var st = fachStats();
+    if (!st.w) return 'Trag mindestens ein Halbjahr ein.';
+    return st.cnt + ' Halbjahre gewertet, Ø ' + (st.s / st.w).toFixed(1).replace('.', ',') + ' Punkte (LK doppelt). Der Rest wird auf 40 hochgerechnet.';
+  }
+  buildSubs();
+
+  var shown = 0;
+  function tweenTotal(to) {
+    if (reduce) { shown = to; $('total').textContent = to; $('dtotal').textContent = to; return; }
+    var from = shown, t0 = performance.now();
+    (function step(t) {
+      var k = clamp((t - t0) / 700, 0, 1), e = 1 - Math.pow(1 - k, 3), v = Math.round(from + (to - from) * e);
+      $('total').textContent = v; $('dtotal').textContent = v;
+      if (k < 1) requestAnimationFrame(step); else shown = to;
+    })(t0);
+  }
+  function setFill(el) { el.style.setProperty('--fill', ((el.value - el.min) / (el.max - el.min) * 100) + '%'); }
+  function chip(ok, t) { return '<span class="chip ' + (ok ? 'ok' : 'bad') + '">' + t + '</span>'; }
+
+  var lastNote = null;
+  function restamp() {
+    var el = $('stampee'); el.classList.remove('stamp'); void el.getBoundingClientRect(); el.classList.add('stamp');
+  }
+
+  function render(src) {
+    var n = clamp(S.n, 20, 44), b1 = block1(), b2 = block2(), total = b1 + b2, nt = noteOf(total);
+    if (document.activeElement !== $('n')) $('n').value = S.n;
+    $('sum').max = 15 * n;
+    if (!(src === 'sum' && document.activeElement === $('sum'))) $('sum').value = S.sum;
+    if (src !== 'avg') $('avg').value = (S.sum / n).toFixed(1);
+    $('avgv').textContent = (S.sum / n).toFixed(1).replace('.', ','); setFill($('avg'));
+    S.p.forEach(function (v, i) { $('p' + i).value = v; $('pv' + i).textContent = v; $('pw' + i).textContent = v * 4; setFill($('p' + i)); });
+    $('b1').textContent = b1; $('b2').textContent = b2; $('b1info').textContent = infoText(); applyMode(); saveState();
+
+    tweenTotal(total);
+    $('bar').style.width = (total / 9) + '%';
+    var noteTxt = nt === null ? '–' : fmt(nt);
+    $('sealnote').textContent = noteTxt; $('dnote').textContent = noteTxt;
+    $('sealwrap').setAttribute('aria-label', 'Abiturnote ' + noteTxt);
+    if (noteTxt !== lastNote) { if (lastNote !== null) restamp(); lastNote = noteTxt; }
+
+    var okB1 = b1 >= 200, okB2 = b2 >= 100, okT = total >= 300, passed = okB1 && okB2 && okT;
+    $('verdict').textContent = passed
+      ? (nt <= 15 ? 'Sehr gut gemacht. Das sieht stark aus.' : nt <= 25 ? 'Solide Leistung, da geht noch was.' : nt <= 35 ? 'Bestanden, mit ordentlich Luft.' : 'Bestanden. Knapp, aber geschafft.')
+      : 'Noch nicht bestanden. Schau, wo dir Punkte fehlen.';
+    $('chips').innerHTML = chip(okB1, 'Block I ' + b1 + ' / 200') + chip(okB2, 'Block II ' + b2 + ' / 100') + chip(okT, 'Gesamt ' + total + ' / 300');
+
+    $('wishv').textContent = fmt(S.wish); setFill($('wish'));
+    var need = minPoints(S.wish), needB2 = Math.max(100, need - b1), out = $('wishout');
+    if (needB2 > 300) {
+      var best = noteOf(b1 + 300);
+      out.innerHTML = '<p>Mit <strong>' + b1 + '</strong> Punkten aus Block I ist die Note <strong>' + fmt(S.wish) + '</strong> nicht mehr erreichbar.</p>' +
+        '<p>Bestmöglich wäre <strong>' + (best === null ? '–' : fmt(best)) + '</strong>, mit 15 Punkten in jeder Prüfung.</p>';
+    } else {
+      out.innerHTML = '<p>Für <strong>' + fmt(S.wish) + '</strong> brauchst du mindestens <strong>' + (b1 + needB2) + '</strong> von 900 Punkten.</p>' +
+        '<p>In Block II sind das <strong>' + needB2 + '</strong> Punkte, im Schnitt <strong>' + (needB2 / 20).toFixed(1).replace('.', ',') + '</strong> pro Prüfung.</p>' +
+        '<p>' + (b2 >= needB2 ? 'Mit deinen Prüfungswerten oben bist du schon drüber.' : 'Mit deinen Prüfungswerten oben fehlen noch ' + (needB2 - b2) + ' Punkte.') + '</p>';
+    }
+  }
+
+  /* ---------- Klausuren-Check ---------- */
+  var KEY = 'abi-klausuren-v1';
+  var K = ['Deutsch', 'Mathe', 'Englisch', 'Biologie', 'Geschichte'].map(function (n) { return { n: n, d: false }; });
+  try { var sv = JSON.parse(localStorage.getItem(KEY) || 'null'); if (Array.isArray(sv) && sv.length) K = sv; } catch (e) {}
+  function saveK() { try { localStorage.setItem(KEY, JSON.stringify(K)); } catch (e) {} }
+  var wasAll = false;
+  function renderK(user) {
+    var list = $('klist'); list.innerHTML = '';
+    K.forEach(function (k, i) {
+      var li = document.createElement('li'); if (k.d) li.className = 'done';
+      var lab = document.createElement('label'), cb = document.createElement('input'), sp = document.createElement('span');
+      cb.type = 'checkbox'; cb.checked = k.d; cb.id = 'k' + i; sp.textContent = k.n;
+      lab.appendChild(cb); lab.appendChild(sp); li.appendChild(lab); list.appendChild(li);
+      cb.addEventListener('change', function () { k.d = cb.checked; saveK(); renderK(true); });
+    });
+    var done = K.filter(function (k) { return k.d; }).length, pct = K.length ? Math.round(done / K.length * 100) : 0;
+    $('pfill').style.width = pct + '%'; $('pbar').setAttribute('aria-valuenow', pct);
+    var all = K.length > 0 && done === K.length;
+    $('reward').hidden = !all;
+    if (!all) { $('rickbox').innerHTML = ''; $('rickbox').hidden = true; $('playRick').hidden = false; }
+    if (all && !wasAll && user) confetti();
+    wasAll = all;
+  }
+  $('playRick').addEventListener('click', function () {
+    var box = $('rickbox');
+    if (!box.firstChild) {
+      var f = document.createElement('iframe');
+      f.src = 'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?autoplay=1&rel=0&playsinline=1';
+      f.title = 'Deine Ergebnisse'; f.allow = 'autoplay; encrypted-media; fullscreen'; f.allowFullscreen = true;
+      f.referrerPolicy = 'strict-origin-when-cross-origin';
+      box.appendChild(f);
+      var pp = document.createElement('p'), a = document.createElement('a');
+      a.href = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.textContent = 'Lädt nicht? Hier öffnen';
+      pp.appendChild(a); box.appendChild(pp);
+    }
+    box.hidden = false; $('playRick').hidden = true;
+  });
+
+  $('addform').addEventListener('submit', function (e) {
+    e.preventDefault(); var v = $('newk').value.trim(); if (!v) return;
+    K.push({ n: v, d: false }); $('newk').value = ''; saveK(); renderK(true);
+  });
+  $('allDone').addEventListener('click', function () { K.forEach(function (k) { k.d = true; }); saveK(); renderK(true); });
+  $('resetK').addEventListener('click', function () { K.forEach(function (k) { k.d = false; }); saveK(); wasAll = false; renderK(false); });
+
+  /* ---------- Konfetti (Blütenblätter in Rot, Rosa, Weiß) ---------- */
+  var cf = $('confetti'), cx = cf.getContext('2d');
+  function confetti() {
+    if (reduce) return;
+    cf.width = innerWidth; cf.height = innerHeight;
+    var cols = ['#d6402c', '#f6b8c8', '#fbf6f7', '#f08aa4', '#1c2547'], ps = [];
+    for (var i = 0; i < 160; i++) ps.push({ x: Math.random() * cf.width, y: -20 - Math.random() * cf.height * .4, vx: (Math.random() - .5) * 3,
+      vy: 2 + Math.random() * 4, r: 5 + Math.random() * 6, a: Math.random() * 6, va: (Math.random() - .5) * .3, c: cols[i % cols.length] });
+    var t0 = performance.now();
+    (function frame(t) {
+      cx.clearRect(0, 0, cf.width, cf.height);
+      ps.forEach(function (p) {
+        p.x += p.vx; p.y += p.vy; p.vy += .04; p.a += p.va;
+        cx.save(); cx.translate(p.x, p.y); cx.rotate(p.a); cx.fillStyle = p.c;
+        cx.beginPath(); cx.ellipse(0, 0, p.r, p.r * .55, 0, 0, 6.283); cx.fill(); cx.restore();
+      });
+      if (t - t0 < 4200) requestAnimationFrame(frame); else cx.clearRect(0, 0, cf.width, cf.height);
+    })(t0);
+  }
+
+  /* ---------- Szene: Fuji, Sonne, Torii, Wellen, Kirschzweig ---------- */
+  function rng(seed) { return function () { seed |= 0; seed = seed + 0x6D2B79F5 | 0; var t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+  function bez(p0, p1, p2, p3, t) {
+    var u = 1 - t;
+    return [u*u*u*p0[0] + 3*u*u*t*p1[0] + 3*u*t*t*p2[0] + t*t*t*p3[0], u*u*u*p0[1] + 3*u*u*t*p1[1] + 3*u*t*t*p2[1] + t*t*t*p3[1]];
+  }
+  function blossom(x, y, r, R, ctx) {
+    var cs = ['#f9ccd7', '#f4a9bd', '#fde6ec'];
+    ctx.save(); ctx.translate(x, y); ctx.rotate(R() * 6.28);
+    ctx.fillStyle = cs[Math.floor(R() * 3)];
+    for (var k = 0; k < 5; k++) { ctx.rotate(1.2566); ctx.beginPath(); ctx.ellipse(r * .55, 0, r * .55, r * .38, 0, 0, 6.283); ctx.fill(); }
+    ctx.fillStyle = '#d6402c'; ctx.beginPath(); ctx.arc(0, 0, r * .16, 0, 6.283); ctx.fill();
+    ctx.restore();
+  }
+  function drawScene() {
+    var c = $('scene'), w = innerWidth, h = innerHeight, dpr = Math.min(devicePixelRatio || 1, 2), x = c.getContext('2d');
+    c.width = w * dpr; c.height = h * dpr; x.setTransform(dpr, 0, 0, dpr, 0, 0);
+    var u = Math.min(w, h) / 700, R = rng(21);
+
+    // Himmel
+    var g = x.createLinearGradient(0, 0, 0, h);
+    g.addColorStop(0, '#1c2547'); g.addColorStop(.30, '#4b4c85'); g.addColorStop(.52, '#c9779a');
+    g.addColorStop(.68, '#f4a98f'); g.addColorStop(.82, '#fad9b8'); g.addColorStop(1, '#fbe9d6');
+    x.fillStyle = g; x.fillRect(0, 0, w, h);
+
+    // Sonne
+    var sx = w * .26, sy = h * .5, sr = Math.max(46, 92 * u);
+    var glow = x.createRadialGradient(sx, sy, sr * .5, sx, sy, sr * 4.2);
+    glow.addColorStop(0, 'rgba(255,170,130,.6)'); glow.addColorStop(1, 'rgba(255,170,130,0)');
+    x.fillStyle = glow; x.fillRect(0, 0, w, h);
+    x.fillStyle = '#d6402c'; x.beginPath(); x.arc(sx, sy, sr, 0, 6.283); x.fill();
+
+    // Wolkenbänder
+    function band(y, len, th, a) { x.fillStyle = 'rgba(255,236,230,' + a + ')'; x.beginPath(); x.ellipse(len.x, y, len.w, th, 0, 0, 6.283); x.fill(); }
+    band(h * .30, { x: w * .15, w: w * .30 }, 7 * u + 2, .28); band(h * .36, { x: w * .85, w: w * .34 }, 9 * u + 2, .22);
+    band(h * .43, { x: w * .50, w: w * .28 }, 6 * u + 2, .2);
+
+    // Fuji
+    var fx = w * .68, peakY = h * .40, baseY = h * .78, half = Math.min(w * .62, h * .62);
+    function fuji(ctx) {
+      ctx.beginPath(); ctx.moveTo(fx - half, baseY);
+      ctx.bezierCurveTo(fx - half * .55, baseY - 14 * u, fx - half * .22, peakY + (baseY - peakY) * .40, fx - 24 * u, peakY + 3);
+      ctx.lineTo(fx + 24 * u, peakY + 3);
+      ctx.bezierCurveTo(fx + half * .22, peakY + (baseY - peakY) * .40, fx + half * .55, baseY - 14 * u, fx + half, baseY);
+      ctx.closePath();
+    }
+    var fg = x.createLinearGradient(0, peakY, 0, baseY);
+    fg.addColorStop(0, '#5b6aa4'); fg.addColorStop(.6, '#3d4a82'); fg.addColorStop(1, '#2b3566');
+    x.fillStyle = fg; fuji(x); x.fill();
+    // Schneekappe
+    x.save(); fuji(x); x.clip();
+    var sny = peakY + (baseY - peakY) * .27;
+    x.fillStyle = '#fdf1f3'; x.beginPath(); x.moveTo(fx - half, peakY - 4); x.lineTo(fx + half, peakY - 4); x.lineTo(fx + half, sny);
+    var jx = fx + half, step = Math.max(14, 22 * u);
+    var zig = 0;
+    for (; jx > fx - half; jx -= step) { zig = zig ? 0 : 1; x.lineTo(jx - step / 2, sny + (zig ? 26 * u : -6 * u) + R() * 10 * u); }
+    x.lineTo(fx - half, sny); x.closePath(); x.fill();
+    x.restore();
+    // Nebel vor dem Berg
+    var mg = x.createLinearGradient(0, baseY - 110 * u, 0, baseY + 8);
+    mg.addColorStop(0, 'rgba(255,230,222,0)'); mg.addColorStop(1, 'rgba(255,230,222,.75)');
+    x.fillStyle = mg; x.fillRect(0, baseY - 110 * u, w, 118 * u);
+
+    // ferne Hügel
+    function ridge(base, amp, seed, col, alpha) {
+      var r = rng(seed), ph = [r() * 6, r() * 6, r() * 6];
+      x.fillStyle = col; x.globalAlpha = alpha; x.beginPath(); x.moveTo(0, h);
+      for (var px = 0; px <= w; px += 6) {
+        var n = Math.sin(px * .006 + ph[0]) + .5 * Math.sin(px * .015 + ph[1]) + .25 * Math.sin(px * .035 + ph[2]);
+        x.lineTo(px, base - (n + 1.75) / 3.5 * amp);
+      }
+      x.lineTo(w, h); x.closePath(); x.fill(); x.globalAlpha = 1;
+    }
+    ridge(baseY + 6, 46 * u, 5, '#3a3f78', .9);
+    ridge(baseY + 26 * u, 34 * u, 9, '#2a3062', 1);
+
+    // Meer mit Seigaiha
+    var seaTop = baseY + 34 * u, rad = Math.max(16, 30 * u), rows = Math.ceil((h - seaTop) / (rad * .5)) + 2;
+    var sea = x.createLinearGradient(0, seaTop, 0, h);
+    sea.addColorStop(0, '#2f4f86'); sea.addColorStop(1, '#141c3e');
+    x.fillStyle = sea; x.fillRect(0, seaTop, w, h - seaTop);
+
+    // Torii steht im Wasser, hinter den vorderen Wellenreihen
+    var tx = w * .12, ty = seaTop + rad * 1.4, th = Math.max(70, 120 * u), tw = th * .78;
+    x.fillStyle = '#c4382a';
+    x.fillRect(tx - tw / 2, ty - th, th * .09, th); x.fillRect(tx + tw / 2 - th * .09, ty - th, th * .09, th);
+    x.fillRect(tx - tw / 2 - th * .04, ty - th * .68, tw + th * .08, th * .07);
+    x.fillStyle = '#2a1820';
+    x.beginPath(); x.moveTo(tx - tw * .68, ty - th * .98); x.quadraticCurveTo(tx, ty - th * .86, tx + tw * .68, ty - th * .98);
+    x.lineTo(tx + tw * .62, ty - th * .86); x.quadraticCurveTo(tx, ty - th * .76, tx - tw * .62, ty - th * .86); x.closePath(); x.fill();
+    x.fillStyle = '#c4382a'; x.fillRect(tx - tw * .1, ty - th * .92, tw * .2, th * .08);
+
+    for (var row = 0; row < rows; row++) {
+      var yy = seaTop + row * rad * .5, off = (row % 2) * rad, t = row / rows;
+      var base = 'rgb(' + Math.round(47 - 27 * t) + ',' + Math.round(79 - 51 * t) + ',' + Math.round(134 - 72 * t) + ')';
+      for (var xx = -rad + off - rad; xx < w + rad; xx += rad * 2) {
+        x.fillStyle = base; x.beginPath(); x.arc(xx, yy, rad, 0, 6.283); x.fill();
+        x.strokeStyle = 'rgba(251,236,230,' + (.34 - t * .18) + ')'; x.lineWidth = Math.max(1, 1.4 * u);
+        for (var k = 1; k <= 3; k++) { x.beginPath(); x.arc(xx, yy, rad * (1 - k * .24), Math.PI, 0); x.stroke(); }
+      }
+    }
+
+    // Kirschzweig oben rechts
+    var p0 = [w * 1.04, h * .015], p1 = [w * .88, h * .17], p2 = [w * .74, h * .06], p3 = [w * .52, h * .15];
+    var steps = 70, pts = [];
+    for (var s = 0; s <= steps; s++) pts.push(bez(p0, p1, p2, p3, s / steps));
+    x.lineCap = 'round'; x.strokeStyle = '#2a1820';
+    for (s = 1; s <= steps; s++) { x.lineWidth = Math.max(2, (15 - 11 * s / steps) * u); x.beginPath(); x.moveTo(pts[s - 1][0], pts[s - 1][1]); x.lineTo(pts[s][0], pts[s][1]); x.stroke(); }
+    var twigs = [];
+    [.2, .38, .55, .72, .86].forEach(function (t0, i) {
+      var b = bez(p0, p1, p2, p3, t0), len = (70 + R() * 70) * u, ang = (i % 2 ? 1 : -1) * (.5 + R() * .5) + 1.6;
+      var e = [b[0] + Math.cos(ang) * len * .6, b[1] + Math.sin(ang) * len];
+      x.lineWidth = Math.max(1.5, 5 * u); x.beginPath(); x.moveTo(b[0], b[1]); x.quadraticCurveTo(b[0] + 10 * u, b[1] + len * .5, e[0], e[1]); x.stroke();
+      twigs.push([b, e]);
+    });
+    var bl = [];
+    pts.forEach(function (p, i) { if (i % 2 === 0 && i > 6) bl.push([p[0], p[1], 1]); });
+    twigs.forEach(function (tw2) { for (var k = 0; k < 7; k++) { var tt = k / 6; bl.push([tw2[0][0] + (tw2[1][0] - tw2[0][0]) * tt, tw2[0][1] + (tw2[1][1] - tw2[0][1]) * tt, 1]); } });
+    bl.forEach(function (b) {
+      var n = 1 + Math.floor(R() * 3);
+      for (var k = 0; k < n; k++) blossom(b[0] + (R() - .5) * 34 * u, b[1] + (R() - .3) * 34 * u, (9 + R() * 8) * u + 3, R, x);
+    });
+  }
+
+  /* ---------- fallende Blütenblätter ---------- */
+  var pc = $('petals'), px2 = pc.getContext('2d'), petals = [];
+  function sizePetals() {
+    var dpr = Math.min(devicePixelRatio || 1, 2);
+    pc.width = innerWidth * dpr; pc.height = innerHeight * dpr; px2.setTransform(dpr, 0, 0, dpr, 0, 0);
+    var n = Math.round(clamp(innerWidth / 22, 14, 44)); petals = [];
+    for (var i = 0; i < n; i++) petals.push({ x: Math.random() * innerWidth, y: Math.random() * innerHeight, s: 5 + Math.random() * 6,
+      vy: .5 + Math.random() * .9, sw: Math.random() * 6, a: Math.random() * 6, va: (Math.random() - .5) * .04, c: Math.random() < .5 ? '#f9c5d3' : '#f3a3ba' });
+  }
+  function drawPetals(t) {
+    px2.clearRect(0, 0, innerWidth, innerHeight);
+    petals.forEach(function (p) {
+      if (!reduce) { p.y += p.vy; p.x += Math.sin(t / 1100 + p.sw) * .7 + .25; p.a += p.va; }
+      if (p.y > innerHeight + 12) { p.y = -12; p.x = Math.random() * innerWidth; }
+      if (p.x > innerWidth + 12) p.x = -12;
+      px2.save(); px2.translate(p.x, p.y); px2.rotate(p.a); px2.fillStyle = p.c; px2.globalAlpha = .85;
+      px2.beginPath(); px2.ellipse(0, 0, p.s, p.s * .55, 0, 0, 6.283); px2.fill(); px2.restore();
+    });
+  }
+  function loop(t) { drawPetals(t); requestAnimationFrame(loop); }
+
+  var rt; window.addEventListener('resize', function () { clearTimeout(rt); rt = setTimeout(function () { drawScene(); sizePetals(); if (reduce) drawPetals(0); }, 120); });
+
+  drawScene(); sizePetals();
+  if (reduce) drawPetals(0); else requestAnimationFrame(loop);
+  render(); renderK(false);
+  $('stampee').classList.add('stamp');
+})();
+</script>
+</body>
+</html>
